@@ -1,0 +1,52 @@
+import skfuzzy.cluster as fuzz
+import numpy as np
+import pandas as pd
+
+# Importar o conjunto de dados
+url = 'http://archive.ics.uci.edu/ml/machine-learning-databases/image/segmentation.data'
+df = pd.read_csv(url, skiprows=3)
+df1 = df.iloc[:,4:9] #PRIMEIRA DIVISAO DO DATASET: 4 A 9
+
+# Converter os dados para uma matriz NumPy
+X = df1.iloc[:, :-1].to_numpy(dtype=np.float32)
+# Separar as classes dos dados e normalizá-los
+y = df1.iloc[:, -1].to_numpy()
+X = (X - X.mean(axis=0)) / X.std(axis=0)
+
+# Executar o algoritmo FCM com a distância de City-Block e a partição fuzzy em 7 grupos, repetindo-o 50 vezes para obter o melhor resultado
+n_clusters = 7
+best_obj_func = np.inf
+best_U = None # Melhor resultado
+
+# Executando o algoritmo FCM com a distância city-block personalizada
+for i in range(50):
+    cntr, u, u0, d, jm, p, fpc = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=1000, metric='cityblock')
+    if jm.mean() < best_obj_func:
+        best_obj_func = jm.mean()
+        best_U = u
+
+# Imprimindo os rótulos dos clusters e os centros
+labels = np.argmax(u, axis=0)
+centers = cntr.T
+print(labels)
+print('------------------------')
+print(centers)
+print('------------------------')
+print(best_U)
+
+#Modiffied Partition Coefficient e Partition entropy:
+pc = np.sum(np.max(best_U, axis=0)) / X.shape[0]
+print("Modified Partition Coefficient:", pc)
+
+pe = - np.sum(best_U * np.log(best_U)) / X.shape[0]
+print("Partition Entropy:", pe)
+
+# Fuzzy C-Means para obter a partição CRISP
+cntr, u, u0, d, jm, p, fpc = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=1000, metric='cityblock')
+labels = np.argmax(u, axis=0)
+
+# Índice Rand
+from sklearn.metrics import adjusted_rand_score
+true_labels = np.array([int(i)-1 for i in y]) # Convert y to 0-based labels
+ri = adjusted_rand_score(true_labels, labels)
+print("Rand index:", ri)
