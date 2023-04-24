@@ -34,6 +34,16 @@ print(centers)
 print('------------------------')
 print(best_U)
 
+#Melhor resultado de acordo com a função objetivo
+best_jm = np.inf
+best_U = None
+
+cntr, u, _, _, jm, _, _ = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=1000, metric='cityblock')
+if jm.mean() < best_jm:
+    best_jm = jm.mean()
+    best_U = u
+print("Melhor resultado de acordo com a Função objetivo:", best_jm)
+
 #Modiffied Partition Coefficient e Partition entropy:
 pc = np.sum(np.max(best_U, axis=0)) / X.shape[0]
 print("Modified Partition Coefficient:", pc)
@@ -47,6 +57,32 @@ labels = np.argmax(u, axis=0)
 
 # Índice Rand
 from sklearn.metrics import adjusted_rand_score
-true_labels = np.array([int(i)-1 for i in y]) # Convert y to 0-based labels
+true_labels = np.array([int(i)-1 for i in y]) # Converter os labels em y
 ri = adjusted_rand_score(true_labels, labels)
-print("Rand index:", ri)
+print("Índice Rand:", ri)
+
+#F-measure adaptada para agrupamento
+from sklearn.metrics import confusion_matrix
+
+cm = confusion_matrix(true_labels, labels)
+
+# Calcular precisao, recall, e F-measure para cada cluster
+precision = []
+recall = []
+f_measure = []
+for i in range(n_clusters):
+    tp = cm[i, i]
+    fp = cm[:, i].sum() - tp
+    fn = cm[i, :].sum() - tp
+    if tp == 0:
+        precision.append(0)
+        recall.append(0)
+        f_measure.append(0)
+    else:
+        precision.append(tp / (tp + fp))
+        recall.append(tp / (tp + fn))
+        f_measure.append(2 * precision[-1] * recall[-1] / (precision[-1] + recall[-1]))
+
+# Calcular o f-measure adaptada para agrupamento
+f_measure_group = sum(f_measure) / n_clusters
+print("F-measure adaptada para agrupamento:", f_measure_group)
