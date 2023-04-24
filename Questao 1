@@ -36,7 +36,6 @@ print(best_U)
 
 #Melhor resultado de acordo com a função objetivo
 best_jm = np.inf
-best_U = None
 
 cntr, u, _, _, jm, _, _ = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=1000, metric='cityblock')
 if jm.mean() < best_jm:
