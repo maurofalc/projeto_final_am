@@ -3,13 +3,25 @@ import numpy as np
 import pandas as pd
 
 # Importar o conjunto de dados
-url = 'http://archive.ics.uci.edu/ml/machine-learning-databases/image/segmentation.data'
-df = pd.read_csv(url, skiprows=3)
-df1 = df.iloc[:,4:9] #PRIMEIRA DIVISAO DO DATASET: 4 A 9
+url1 = "https://archive.ics.uci.edu/ml/machine-learning-databases/image/segmentation.data"
+url2 = "https://archive.ics.uci.edu/ml/machine-learning-databases/image/segmentation.test"
+
+cols = ["CLASS", "REGION-CENTROID-COL", "REGION-CENTROID-ROW", "REGION-PIXEL-COUNT", "SHORT-LINE-DENSITY-5", "SHORT-LINE-DENSITY-2", "VEDGE-MEAN", "VEDGE-SD", "HEDGE-MEAN", "HEDGE-SD", "INTENSITY-MEAN","RAWRED-MEAN","RAWBLUE-MEAN","RAWGREEN-MEAN","EXRED-MEAN","EXBLUE-MEAN","EXGREEN-MEAN","VALUE-MEAN","SATURATION-MEAN","HUE-MEAN"]
+
+df1 = pd.read_csv(url1, header=2, names=cols)
+df2 = pd.read_csv(url2, header=2, names=cols)
+df3 = pd.concat([df1, df2]).drop(["REGION-CENTROID-COL", "REGION-CENTROID-ROW", "REGION-PIXEL-COUNT"], axis=1)
+
+#Se tirar essa parte dá erro no índice de Rand para df1
+df1 = df3.iloc[:,4:9] #Dataset específico para o código
+df2 = df3.iloc[:,10:19]
+df3 = df3.iloc[:,4:19]
 
 # Converter os dados para uma matriz NumPy
 X = df1.iloc[:, :-1].to_numpy(dtype=np.float32)
-# Separar as classes dos dados e normalizá-los
+
+
+# Separar as classes dos dados e normalizá-los/QUANDO NAO NORMALIZO TB DÁ ERRO NO INDICE DE RAND
 y = df1.iloc[:, -1].to_numpy()
 X = (X - X.mean(axis=0)) / X.std(axis=0)
 
@@ -85,3 +97,36 @@ for i in range(n_clusters):
 # Calcular o f-measure adaptada para agrupamento
 f_measure_group = sum(f_measure) / n_clusters
 print("F-measure adaptada para agrupamento:", f_measure_group)
+
+#Comparar os pares na partição
+
+from itertools import combinations
+
+# Compare pairs of partitions
+for i, j in combinations(range(7), 2):
+    labels1 = (labels == i).astype(int)
+    labels2 = (labels == j).astype(int)
+    ri = adjusted_rand_score(labels1, labels2)
+    
+    cm = confusion_matrix(labels1, labels2)
+    precision = cm[1, 1] / cm[:, 1].sum()
+    recall = cm[1, 1] / cm[1, :].sum()
+    if precision == 0 or recall == 0:
+        f_measure = 0
+    else:
+        f_measure = 2 * precision * recall / (precision + recall)
+    
+    print("Pair ({}, {}) - Rand index: {:.3f}, F-measure adapted to the group: {:.3f}".format(i, j, ri, f_measure))
+    
+    #Matriz de confusão
+    
+    from sklearn.metrics import confusion_matrix
+
+# Convert true labels to 0-based labels
+true_labels = np.array([int(i)-1 for i in y])
+
+# Compute confusion matrix
+cm = confusion_matrix(true_labels, labels)
+
+print("Matriz de confusão:")
+print(cm_labeled)
