@@ -1,6 +1,14 @@
 import skfuzzy.cluster as fuzz
 import numpy as np
 import pandas as pd
+from sklearn.metrics import confusion_matrix
+from scipy.spatial.distance import cdist
+from sklearn.preprocessing import StandardScaler
+import skfuzzy as fuzz
+from sklearn.metrics import adjusted_rand_score
+from sklearn.metrics import f1_score
+from itertools import combinations
+
 
 # Importar o conjunto de dados
 url1 = "https://archive.ics.uci.edu/ml/machine-learning-databases/image/segmentation.data"
@@ -8,45 +16,74 @@ url2 = "https://archive.ics.uci.edu/ml/machine-learning-databases/image/segmenta
 
 cols = ["CLASS", "REGION-CENTROID-COL", "REGION-CENTROID-ROW", "REGION-PIXEL-COUNT", "SHORT-LINE-DENSITY-5", "SHORT-LINE-DENSITY-2", "VEDGE-MEAN", "VEDGE-SD", "HEDGE-MEAN", "HEDGE-SD", "INTENSITY-MEAN","RAWRED-MEAN","RAWBLUE-MEAN","RAWGREEN-MEAN","EXRED-MEAN","EXBLUE-MEAN","EXGREEN-MEAN","VALUE-MEAN","SATURATION-MEAN","HUE-MEAN"]
 
-df1 = pd.read_csv(url1, header=2, names=cols)
-df2 = pd.read_csv(url2, header=2, names=cols)
-df3 = pd.concat([df1, df2]).drop(["REGION-CENTROID-COL", "REGION-CENTROID-ROW", "REGION-PIXEL-COUNT"], axis=1)
+data1 = pd.read_csv(url1, header=2, usecols=cols)
+data2 = pd.read_csv(url2, header=2, usecols=cols)
+data = pd.concat([data1, data2])
 
-#Se tirar essa parte dá erro no índice de Rand para df1
-df1 = df3.iloc[:,4:9] #Dataset específico para o código
-df2 = df3.iloc[:,10:19]
-df3 = df3.iloc[:,4:19]
+dataset1 = data.iloc[:, 4:9]
+dataset2 = data.iloc[:, 10:19]
+dataset3 = data.iloc[:, 4:19]
+dfs = [dataset1,dataset2,dataset3]
+best_Us = []
 
-# Converter os dados para uma matriz NumPy
-X = df1.iloc[:, :-1].to_numpy(dtype=np.float32)
-
-
-# Separar as classes dos dados e normalizá-los/QUANDO NAO NORMALIZO TB DÁ ERRO NO INDICE DE RAND
-y = df1.iloc[:, -1].to_numpy()
+#Converter para Numpy
+X = data.iloc[:, :-1].to_numpy(dtype=np.float32)
+y = data.iloc[:, -1].to_numpy()
 X = (X - X.mean(axis=0)) / X.std(axis=0)
 
-# Executar o algoritmo FCM com a distância de City-Block e a partição fuzzy em 7 grupos, repetindo-o 50 vezes para obter o melhor resultado
+'''
+Executar o algoritmo FCM com a distância de City-Block e a partição fuzzy em 7 grupos, repetindo-o 50 vezes 
+para obter o melhor resultado
+'''
 n_clusters = 7
-best_obj_func = np.inf
-best_U = None # Melhor resultado
 
-# Executando o algoritmo FCM com a distância city-block personalizada
-for i in range(50):
-    cntr, u, u0, d, jm, p, fpc = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=1000, metric='cityblock')
-    if jm.mean() < best_obj_func:
-        best_obj_func = jm.mean()
-        best_U = u
+for data in range(3): #Aqui selecionamos os 3 datasets
+    X = (X - X.mean(axis=0)) / X.std(axis=0) # Normalizar os dados
+    best_obj_func = np.inf # Executando o algoritmo FCM com a distância city-block personalizada
+    best_U = None # Melhor resultado
+    for i in range(50):
+        cntr, u, u0, d, jm, p, fpc = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=100, metric='cityblock')
+        if jm.mean() < best_obj_func:
+            best_obj_func = jm.mean()
+            best_U = u
+    best_Us.append(best_U) #best_Us contém todas as melhores matrizes de partição fuzzy obtidas no algoritmo FCM
 
+'''
+A saída do algoritmo inclui os centros de cluster (cntr), a matriz de partição (u), a matriz de partição final (u0), a matriz de distância (d), 
+o valor da função objetivo (jm), a matriz de probabilidade (p) e a partição difusa coeficiente (fpc).
+
+Ao final de cada iteração, o código verifica se o valor da função objetivo (jm.mean()) é menor que o melhor valor atual da função objetivo 
+(best_obj_func). Se for, o valor da função objetivo atual e a partição matriz (u) são salvas como o novo melhor valor da função objetivo e matriz 
+de partição, respectivamente.
+'''
+
+# Definir rótulos com base na matriz fuzzy
+labels = np.argmax(best_U, axis=0)
+
+# Converter rótulos verdadeiros para 0-based
+true_labels = np.array([int(i)-1 for i in y])
+
+'''
+A primeira linha dos rótulos de código = np.argmax(best_U, axis=0) é usada para atribuir os rótulos aos pontos de dados com base na matriz de partição 
+fuzzy best_U. A matriz de partição fuzzy best_U contém os graus de pertinência de cada ponto de dados para cada cluster na forma de probabilidades. 
+A função argmax retorna o índice do cluster que possui o maior grau de associação para cada ponto de dados.
+
+A segunda linha do código true_labels = np.array([int(i)-1 for i in y]) é usada para converter os rótulos verdadeiros de 1 para 0. No conjunto de dados
+original, os rótulos são atribuídos com valores de 1 a n, onde n é o número de classes. No entanto, em Python, os índices de arrays começam em 0. 
+Portanto, os rótulos precisam ser convertidos em 0 antes de compará-los com os rótulos previstos obtidos do algoritmo de agrupamento.
+'''
 # Imprimindo os rótulos dos clusters e os centros
-labels = np.argmax(u, axis=0)
+
 centers = cntr.T
 print(labels)
 print('------------------------')
 print(centers)
 print('------------------------')
 print(best_U)
+print('------------------------')
+for matriz in best_U: #Matrizes de partição obtidas para cada repetição do algoritmo FCM, salvas na lista best_Us.
+   print(matriz)
 
-#Melhor resultado de acordo com a função objetivo
 best_jm = np.inf
 
 cntr, u, _, _, jm, _, _ = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=1000, metric='cityblock')
@@ -55,54 +92,57 @@ if jm.mean() < best_jm:
     best_U = u
 print("Melhor resultado de acordo com a Função objetivo:", best_jm)
 
-#Modiffied Partition Coefficient e Partition entropy:
-pc = np.sum(np.max(best_U, axis=0)) / X.shape[0]
-print("Modified Partition Coefficient:", pc)
+'''
+O código então verifica se o valor da função objetivo é melhor que o melhor valor da função objetivo obtido até o momento. 
+Se for, ele atualiza o valor de best_jm e best_U.
 
-pe = - np.sum(best_U * np.log(best_U)) / X.shape[0]
-print("Partition Entropy:", pe)
+Por fim, imprime o melhor valor da função objetivo obtido até o momento.
+'''
 
-# Fuzzy C-Means para obter a partição CRISP
-cntr, u, u0, d, jm, p, fpc = fuzz.cmeans(data=X.T, c=n_clusters, m=2, error=1e-3, maxiter=1000, metric='cityblock')
-labels = np.argmax(u, axis=0)
+#Gerando matriz de confusão para cada Dataset
 
-# Índice Rand
-from sklearn.metrics import adjusted_rand_score
-true_labels = np.array([int(i)-1 for i in y]) # Converter os labels em y
-ri = adjusted_rand_score(true_labels, labels)
-print("Índice Rand:", ri)
+for df in dfs:
+    scaler = StandardScaler()
+    df_norm = scaler.fit_transform(df)
+for i, U in enumerate(best_Us):
+    print(f"Matriz de confusão para o Dataset {i+1}:\n")
+    cntr, U, _, _, _, _, _ = fuzz.cmeans(data=dfs[i].T, c=n_clusters, m=2, error=1e-3, maxiter=100, metric='cityblock', init=best_U)
+    clusters = np.argmax(U, axis=0)
+    true_labels = np.zeros_like(clusters)
+    true_labels[:100] = 0
+    true_labels[100:200] = 1
+    true_labels[200:] = 2
+    cm = confusion_matrix(true_labels, clusters)
+    print(cm)
+    print("\n")
 
-#F-measure adaptada para agrupamento
-from sklearn.metrics import confusion_matrix
+# Índice de Rand para cada Dataset
+for i, dataset in enumerate(dfs):
+    X = dataset.to_numpy(dtype=np.float32) #Convertendo para Numpy array
+    X = (X - X.mean(axis=0)) / X.std(axis=0)
+    
+    crisp_labels = np.argmax(u, axis=0)  # Converte partição fuzzy para crisp
+    rand_index = adjusted_rand_score(true_labels, crisp_labels)  # Calcula o indice de Rand ajustado para cada grupo
+    print(f"Dataset {i+1} - Rand Index: {rand_index}")
 
-cm = confusion_matrix(true_labels, labels)
+#F-measure para cada cluster
 
-# Calcular precisao, recall, e F-measure para cada cluster
-precision = []
-recall = []
-f_measure = []
-for i in range(n_clusters):
-    tp = cm[i, i]
-    fp = cm[:, i].sum() - tp
-    fn = cm[i, :].sum() - tp
-    if tp == 0:
-        precision.append(0)
-        recall.append(0)
-        f_measure.append(0)
-    else:
-        precision.append(tp / (tp + fp))
-        recall.append(tp / (tp + fn))
-        f_measure.append(2 * precision[-1] * recall[-1] / (precision[-1] + recall[-1]))
-
-# Calcular o f-measure adaptada para agrupamento
-f_measure_group = sum(f_measure) / n_clusters
-print("F-measure adaptada para agrupamento:", f_measure_group)
-
-#Comparar os pares na partição
-
-from itertools import combinations
-
-# Compare pairs of partitions
+for data in range(3): # Itera cada Dataset
+    best_U = best_Us[data]  # Pega a melhor partição fuzzy
+    labels = np.argmax(best_U, axis=0) # Obtenha os rótulos atribuídos pela partição fuzzy
+    true_labels = np.array([int(i)-1 for i in y]) # Converta os rótulos verdadeiros em números inteiros baseados em 0
+    for i in range(n_clusters): # Calcule a f-measure para cada grupo que tenha pelo menos um elemento atribuído a ele
+        indices = np.where(labels == i)[0]
+        if len(indices) > 0:
+            precision = np.sum(true_labels[indices] == i) / len(indices)
+            recall = np.sum(labels[indices] == i) / np.sum(labels == i)
+            f_measure = 2 * precision * recall / (precision + recall)
+            print(f"Dataset {data+1}, Cluster {i+1}: F-measure = {f_measure}")
+        else:
+            print(f"Dataset {data+1}, Cluster {i+1}: No elements assigned to this cluster")
+            
+            
+# Comparando as partições em pares
 for i, j in combinations(range(7), 2):
     labels1 = (labels == i).astype(int)
     labels2 = (labels == j).astype(int)
@@ -117,16 +157,25 @@ for i, j in combinations(range(7), 2):
         f_measure = 2 * precision * recall / (precision + recall)
     
     print("Pair ({}, {}) - Rand index: {:.3f}, F-measure adapted to the group: {:.3f}".format(i, j, ri, f_measure))
+
+#PROTÓTIPOS
+for i, proto in enumerate(cntr):
+    print("Prototype {}: {}".format(i+1, proto))
     
-    #Matriz de confusão
-    
-    from sklearn.metrics import confusion_matrix
 
-# Convert true labels to 0-based labels
-true_labels = np.array([int(i)-1 for i in y])
+# Convertendo partição fuzzy em crisp
+crisp_partitions = [np.argmax(u, axis=0) for u in best_Us]
 
-# Compute confusion matrix
-cm = confusion_matrix(true_labels, labels)
+# Calculo da matriz de confusão
+cm = confusion_matrix(true_labels, pred_labels)
 
-print("Matriz de confusão:")
-print(cm_labeled)
+print("Matriz de confusão vs a priori:\n", cm)
+
+#Matriz deconfusão de uma partição crisp vs a outra
+for i in range(len(crisp_partitions)):
+    for j in range(i+1, len(crisp_partitions)):
+        print(f"Matriz de confusão do dataset {i+1} vs dataset {j+1}:")
+        cm = confusion_matrix(crisp_partitions[i], crisp_partitions[j])
+        
+        print(cm)
+
